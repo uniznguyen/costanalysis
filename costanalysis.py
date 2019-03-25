@@ -4,8 +4,9 @@ import numpy as np
 import sqlite3 as db
 import os
 
-ITEMS = """'3-FG:82592','3-FG:85592','3-FG:82594','3-FG:83594','3-FG:85594','3-FG:81596','3-FG:82596','3-FG:83596',
-'3-FG:85596','3-FG:81595','3-FG:82595','3-FG:83595'"""
+ITEMS = """'3-FG:80510','3-FG:80574'"""
+
+PRICE_LEVEL = '2018 HV Mid Yr'
 
 cn = pyodbc.connect('DSN=QuickBooks Data;')
 sql = """SELECT ListID, Name, FullName, IsActive, ParentRefFullName, SalesDesc,PurchaseDesc, PurchaseCost, AverageCost 
@@ -29,7 +30,7 @@ FROM
 
 sql11 = f"""SELECT Name, PriceLevelPerItemItemRefFullName, PriceLevelPerItemCustomPrice
 FROM PriceLevelPerItem
-WHERE Name = '2018 HV Mid Yr' AND PriceLevelPerItemItemRefFullName IN ({ITEMS})
+WHERE Name = '{PRICE_LEVEL}' AND PriceLevelPerItemItemRefFullName IN ({ITEMS})
 """
 
 df_item_assembly = pd.read_sql(sql,cn)
@@ -85,20 +86,20 @@ df_recursive.to_sql('Recursive',con,schema=None,if_exists='replace', index=True,
 sql7 = """DROP TABLE IF EXISTS Merge"""
 cursor.execute(sql7)
 
-sql8 = """CREATE TABLE Merge  AS SELECT C.FullName, C.ItemInventoryAssemblyLnItemInventoryRefFullName, C.TotalQTYUsed, Max(I.PurchaseCost, I.AverageCost) as CostPerUnit, Max(I.PurchaseCost, I.AverageCost) * C.TotalQTYUsed As TotalCost
+sql8 = """CREATE TABLE Merge  AS SELECT C.FullName, C.ItemInventoryAssemblyLnItemInventoryRefFullName, C.TotalQTYUsed,I.PurchaseCost,I.AverageCost, Max(I.PurchaseCost, I.AverageCost) as CostPerUnit, Max(I.PurchaseCost, I.AverageCost) * C.TotalQTYUsed As TotalCost
 FROM Recursive C INNER JOIN ItemInventory I ON C.ItemInventoryAssemblyLnItemInventoryRefFullName = I.FullName ORDER BY C.FullName"""
 cursor.execute(sql8)
 
 
-sql5 = """SELECT C.FullName, C.ItemInventoryAssemblyLnItemInventoryRefFullName, C.TotalQTYUsed, Max(I.PurchaseCost, I.AverageCost) as CostPerUnit, Max(I.PurchaseCost, I.AverageCost) * C.TotalQTYUsed
+sql5 = """SELECT C.FullName, C.ItemInventoryAssemblyLnItemInventoryRefFullName, C.TotalQTYUsed,I.PurchaseCost,I.AverageCost, Max(I.PurchaseCost, I.AverageCost) as CostPerUnit, Max(I.PurchaseCost, I.AverageCost) * C.TotalQTYUsed
 FROM Recursive C INNER JOIN ItemInventory I ON C.ItemInventoryAssemblyLnItemInventoryRefFullName = I.FullName"""
 cursor.execute(sql5)
-df5 = pd.DataFrame(cursor.fetchall(), columns = ['FullName', 'ItemInventoryAssemblyLnItemInventoryRefFullName', 'C.TotalQTYUsed','CostPerUnit','TotalCost'])
+df5 = pd.DataFrame(cursor.fetchall(), columns = ['FullName', 'ItemInventoryAssemblyLnItemInventoryRefFullName', 'C.TotalQTYUsed','PurchaseCost','AverageCost','CostPerUnit','TotalCost'])
 
-sql6 = """SELECT C.FullName, C.ItemInventoryAssemblyLnItemInventoryRefFullName, C.TotalQTYUsed, Max(IA.PurchaseCost, IA.AverageCost) as CostPerUnit, Max(IA.PurchaseCost, IA.AverageCost) * C.TotalQTYUsed
+sql6 = """SELECT C.FullName, C.ItemInventoryAssemblyLnItemInventoryRefFullName, C.TotalQTYUsed,IA.PurchaseCost,IA.AverageCost, Max(IA.PurchaseCost, IA.AverageCost) as CostPerUnit, Max(IA.PurchaseCost, IA.AverageCost) * C.TotalQTYUsed
 FROM Recursive C INNER JOIN ItemInventoryAssembly IA ON C.ItemInventoryAssemblyLnItemInventoryRefFullName = IA.FullName"""
 cursor.execute(sql6)
-df6 = pd.DataFrame(cursor.fetchall(), columns = ['FullName', 'ItemInventoryAssemblyLnItemInventoryRefFullName', 'C.TotalQTYUsed','CostPerUnit','TotalCost'])
+df6 = pd.DataFrame(cursor.fetchall(), columns = ['FullName', 'ItemInventoryAssemblyLnItemInventoryRefFullName', 'C.TotalQTYUsed','PurchaseCost','AverageCost','CostPerUnit','TotalCost'])
 
 df_total_cost = pd.concat([df5,df6])
 
@@ -109,7 +110,7 @@ cursor.execute(sql9)
 sql9 = """CREATE TABLE IF NOT EXISTS CompareCost AS 
 SELECT M.FullName, IA.PurchaseCost, Sum(M.TotalCost) As ActualCost, PI.PriceLevelPerItemCustomPrice AS HVPrice
 FROM Merge M INNER JOIN ItemInventoryAssembly IA ON M.FullName = IA.FullName
-INNER JOIN PriceLevelPerItem PI ON M.FullName = PI.PriceLevelPerItemItemRefFullName
+LEFT JOIN PriceLevelPerItem PI ON M.FullName = PI.PriceLevelPerItemItemRefFullName
 GROUP BY M.FullName"""
 
 cursor.execute(sql9)
